@@ -3,19 +3,21 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+```{r}
+data = cleaned_data
+```
 
 ```{r}
 set.seed(42)
-sample <- sample(c(TRUE, FALSE), nrow(data), replace=TRUE, prob=c(0.7,0.3))
-train  <- data[sample, ]
-test   <- data[!sample, ]
+test <- sample(1:nrow(data), size = 1395)
+train <- which(!(1:nrow(data)) %in% test)
 ```
 
 
 ```{r}
 library(randomForest)
 set.seed(42)
-rf <- randomForest(ViolentCrimesPerPop ~ ., data = train,
+rf <- randomForest(ViolentCrimesPerPop ~ ., data = data[train,],
 importance = TRUE, mtry = sqrt(ncol(data)-1), na.action = na.omit)
 ```
 
@@ -26,4 +28,39 @@ rf_imps <- importance(rf)
 head(rf_imps[order(rf_imps[ , "%IncMSE"], decreasing = TRUE),], 10)
 head(rf_imps[order(rf_imps[ , "IncNodePurity"], decreasing = TRUE),], 10)
 ```
+```{r}
+inc_MSE = head(rf_imps[order(rf_imps[ , "%IncMSE"], decreasing = TRUE),], 10)
+inc_node = head(rf_imps[order(rf_imps[ , "IncNodePurity"], decreasing = TRUE),], 10)
+imp_names = c(row.names(inc_MSE), row.names(inc_node))
+imp_names = unique(imp_names)
+
+```
+
+```{r}
+rf_vars = data[,imp_names]
+head(rf_vars)
+```
+```{r}
+colnames(rf_vars)
+```
+
+```{r}
+par(mfrow = c(2, 6))
+for (i in 1:ncol(rf_vars)) {
+  partialPlot(rf, x.var = colnames(rf_vars)[i], pred.data = data[train, ],
+  which.class = "RB", cex.main = .7)
+}
+```
+
+
+```{r}
+set.seed(4177789)
+y_test = data$ViolentCrimesPerPop[test]
+final_rf = randomForest(ViolentCrimesPerPop ~ ., data = data[train, ],
+importance = TRUE, mtry = sqrt(ncol(data)-1)) 
+rf_preds <- predict(final_rf, newdata = data[test, ])
+rf_mse = mean((rf_preds - y_test)**2)
+rf_mse
+```
+
 
