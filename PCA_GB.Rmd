@@ -1,0 +1,329 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(ggplot2)
+library(mgcv)
+library(splines)
+library(gam)
+library(corrplot)
+library("e1071")
+library(GGally)
+library(gbm)
+library(caret)
+library(factoextra)
+library(MLmetrics)
+library(xgboost)
+library(caTools)
+library(dplyr)
+library(caret)
+
+file_path <- "communities.data"
+
+data <- read.table(file_path, sep = ",", header = TRUE, na.strings = "?")
+
+head(data)
+colnames(data)
+
+```
+```{r}
+names_file <- "communities.names"
+column_names <- readLines(names_file)
+
+csv_file <- "communities.csv"
+
+# Write the data to a .csv file
+write.csv(data, file = csv_file, row.names = FALSE)
+
+# Confirm the .csv file has been created and written correctly
+print(paste("CSV file saved to", csv_file))
+```
+
+```{r}
+# Provided string with column names
+# Extract lines that start with '@attribute'
+attribute_lines <- grep("^@attribute", column_names, value = TRUE)
+
+# Extract column names from the attribute lines
+column_names <- gsub("^@attribute\\s+([a-zA-Z0-9_]+)\\s+.*$", "\\1", attribute_lines)
+
+# Print the extracted column names
+print(column_names)
+
+```
+### Clean Data
+```{r}
+data_file <- "communities.data"
+
+# Read the .data file into a data frame
+data <- read.table(data_file, sep = ",", header = FALSE, na.strings = "?")
+
+# Assign column names from the extracted list
+colnames(data) <- column_names
+
+# View the data to ensure the column names are correctly assigned
+head(data)
+
+# Read the .data file into a data frame
+data <- read.table(data_file, sep = ",", header = FALSE, na.strings = "?")
+
+# Assign column names from the extracted list
+colnames(data) <- column_names
+
+# View the data to ensure the column names are correctly assigned
+head(data)
+```
+```{r}
+null_prop <- colMeans(is.na(data))
+
+# Set a threshold for proportion of NULL values
+threshold <- 0.5  # For example, columns with over 50% NULL values will be removed
+
+# Identify columns to remove
+columns_to_remove <- names(null_prop[null_prop > threshold])
+
+# Remove identified columns from the data frame
+cleaned_data <- data[, !names(data) %in% columns_to_remove]
+
+# View the cleaned data
+print(cleaned_data)
+
+
+cleaned_data<- na.omit(cleaned_data)
+
+numeric_data <- select_if(cleaned_data, is.numeric)
+
+# View the selected numeric variables
+print(numeric_data)
+
+pca_data <- numeric_data[, !names(numeric_data) %in% c("ViolentCrimesPerPop")]
+
+# View the modified dataset
+print(pca_data)
+
+```
+### PCA
+```{r}
+pca_result <- prcomp(pca_data, scale=TRUE)
+
+plot(pca_result$x[,1:14], xlab="Principal Components", main="Principle Component Analysis" )
+abline(h = 1, col = "blue", lty = 1) #eigenvalues should be > 1 
+
+print(pca_result)
+var <- get_pca_var(pca_result)
+
+eigenvalues <- pca_result$sdev^2
+
+# Identify PCs with eigenvalues greater than 1
+pcs_gt_1 <- which(eigenvalues > 1)
+
+# Filter PCA result and eigenvalues
+pca_result_gt_1 <- pca_result
+pca_result_gt_1$sdev <- pca_result$sdev[pcs_gt_1]
+pca_result_gt_1$rotation <- pca_result$rotation[, pcs_gt_1]
+
+# Plot PCA with PCs having eigenvalues greater than 1
+plot(pca_result_gt_1, xlab = "Principal Components (Eigenvalue > 1)", main = "Principle Component Analysis (Eigenvalue > 1)")
+abline(h = 1, col = "blue", lty = 1) # Eigenvalues should be > 1
+
+# Extract variable contributions
+var <- get_pca_var(pca_result_gt_1)
+```
+
+
+```{r}
+eigenvalues <- pca_result$sdev^2
+eigenvalues_subset <- eigenvalues[1:14]
+
+pcs <- pca_result$x[, 1:14]
+
+# Create a scatter plot matrix
+pairs(pcs, main = "Scatter Plot Matrix of Principal Components")
+```
+### PCA plot
+
+```{r}
+variance_explained <- summary(pca_result)$importance[2, 1:20]  # Assuming you want to display the first 20 components
+
+# Plot a grouped bar chart
+barplot(variance_explained, 
+        main = "Variance Explained by Principal Components",
+        xlab = "Principal Component", ylab = "Variance Explained",
+        col = "cornflowerblue", ylim = c(0, max(variance_explained) + 0.05),
+        border = "black", names.arg = 1:20) + abline(h = 0.01, col = "red")
+```
+
+### ScreePlots
+```{r}
+prop_var_expl_sc = summary(pca_result)$importance[2,]
+cum_var_expl_sc = summary(pca_result)$importance[3,]
+
+plot(prop_var_expl_sc, type="b", xlab="Component number", ylab="Proportion of variance explained", ylim=c(0,1))
+plot(cum_var_expl_sc, type="b", xlab="Number of components", ylab="Cumulative variance explained", ylim=c(0,1))
+
+elbow_point <- which(diff(prop_var_expl_sc) < 0.1)[1]
+
+# Fit a linear model (tangent) to the elbow point and the adjacent point
+tangent_line <- lm(prop_var_expl_sc[elbow_point:(elbow_point + 1)] ~ c(elbow_point, elbow_point + 1))
+
+# Plot the scree plot
+plot(prop_var_expl_sc, type = "b", xlab = "Component number", ylab = "Proportion of variance explained", ylim = c(0, 1))
+
+# Add the tangent line
+abline(tangent_line, col = "red")
+```
+
+
+```{r}
+library(pathviewr)
+
+df <- data.frame(x = seq(1:102),
+                 y = prop_var_expl_sc)
+plot(df)
+find_curve_elbow(df, plot_curve = TRUE)
+```
+```{r}
+library(MAP)
+# Now, you can call the MAP function
+MAP::MAP(numeric_data)
+```
+
+### Horn's Parallel Analysis
+```{r}
+library(paran)
+parallel_result <- paran(numeric_data)
+```
+
+
+```{r}
+# Contributions of variables to PC1
+fviz_contrib(pca_result, choice = "var", axes = 1, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 2, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14), axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 3, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14), axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 4, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 5, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 6, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 7, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14), axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 8, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14), axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 9, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 10, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 11, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 12, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 13, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+fviz_contrib(pca_result, choice = "var", axes = 14, top = 10) + xlab("Variables (truncated)") + theme(axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+```
+
+
+```{r}
+
+pca_scores <- pca_result$x[, 1:14]
+
+new_data <- cbind(cleaned_data, pca_scores)
+
+main_data_with_pca <- new_data[, -c(1:103)]
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+
+
+### Gradient Boosting 
+```{r}
+n_rows <- nrow(main_data_with_pca)
+
+# Generate indices for splitting
+train <- sample(1:n_rows, 0.7 * n_rows)
+
+# Split data into training and testing sets
+train_data <- main_data_with_pca[train, ]
+test_data <- main_data_with_pca[-train, ]
+```
+
+
+```{r}
+mcr <- function(y, pred_prob){
+  if (length(pred_prob) != length(y)){
+    stop("Vectors should be the same length")
+  } else {
+    1 - sum(diag(table(y, pred_prob >= .5))) / length(pred_prob)
+  }
+}
+
+#y_test <- 
+#y_test <- as.numeric(MH_dat$dep_sev_fu)[test]-1
+```
+
+```{r}
+grid <- expand.grid(shrinkage = c(.1, .01, .001),
+                    n.trees = c(10, 100, 1000, 2000, 2500), 
+                    interaction.depth = 1:4,
+                    n.minobsinnode= 10)
+```
+```{r}
+plot<-fviz_contrib(pca_result, choice = "ind", axes = 1:14)
+plot + theme_minimal() + theme(axis.text.x = element_blank()) 
+```
+
+```{r}
+set.seed(4168216)
+gbmFit <- train(ViolentCrimesPerPop ~., data = main_data_with_pca[train, ], tuneGrid = grid, distribution="gaussian", method="gbm", trControl = trainControl(number=10L, verboseIter = TRUE)  )
+```
+```{r}
+plot(gbmFit)
+```
+
+```{r}
+gbmImp <- varImp(gbmFit, scale = FALSE)
+gbmImp
+```
+```{r}
+plot(gbmImp, top = 20)
+```
+
+```{r}
+#importance <- summary(gbmFit, plotit = FALSE)
+gbmFit$bestTune
+gbmBest <- gbm(ViolentCrimesPerPop ~. , data = main_data_with_pca[train,], distribution="gaussian", n.trees= 1000, interaction.depth = 4, shrinkage = 0.01)
+```
+
+```{r}
+pred_gbm = predict(gbmBest, newdata=main_data_with_pca[-train,]) 
+
+
+mean_avg_error_gbm <- MAE(pred_gbm, main_data_with_pca[-train, ]$ViolentCrimesPerPop)
+print(mean_avg_error_gbm)
+
+```
+
+```{r}
+library(gbm)
+library(pdp)
+
+plot.gbm(gbmBest, i.var=1)
+plot.gbm(gbmBest, i.var=2)
+plot.gbm(gbmBest, i.var=3)
+plot.gbm(gbmBest, i.var=4)
+plot.gbm(gbmBest, i.var=5)
+plot.gbm(gbmBest, i.var=6)
+plot.gbm(gbmBest, i.var=7)
+plot.gbm(gbmBest, i.var=8)
+plot.gbm(gbmBest, i.var=9)
+plot.gbm(gbmBest, i.var=10)
+plot.gbm(gbmBest, i.var=11)
+plot.gbm(gbmBest, i.var=12)
+plot.gbm(gbmBest, i.var=13)
+plot.gbm(gbmBest, i.var=14)
+plot.gbm(gbmBest, i.var=15)
+plot.gbm(gbmBest, i.var=16)
+plot.gbm(gbmBest, i.var=17)
+```
+
