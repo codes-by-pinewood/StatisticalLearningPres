@@ -1,0 +1,52 @@
+---
+title: "K means clustering"
+author: "Kylee Ornstein"
+date: "2024-06-01"
+output: html_document
+---
+
+```{r packages}
+install.packages("maps")
+install.packages("mapproj")
+```
+```{r}
+library(ggplot2)
+library(mapproj)
+library(maps)
+```
+
+```{r}
+us <- map_data("state")
+dummyDF <- data.frame(state.name, stringsAsFactors=FALSE)
+dummyDF$state <- tolower(dummyDF$state.name)
+options(repr.plot.width = 15, repr.plot.height = 10)
+map.simple <- ggplot(dummyDF, aes(map_id = state)) +
+                     geom_map(map = us, fill="white", color="black") +
+                     expand_limits(x = us$long, y = us$lat) + # coordinates for state borders
+                     coord_map("mercator") + 
+                     ggtitle("basic map of continental USA")
+```
+```{r}
+counties = map_data("county")
+max(data$state)
+
+```
+```{r}
+library(readr)
+state_codes <- read_delim("https://www2.census.gov/geo/docs/reference/state.txt", 
+    delim = "|", escape_double = FALSE, trim_ws = TRUE)
+```
+```{r}
+state_codes$STATE_NAME = tolower(state_codes$STATE_NAME)
+head(state_codes)
+state_codes = state_codes[-c(52:56),]
+```
+```{r}
+state_names = state_codes$STATE_NAME
+for (i in 1:length(data$state)) {
+  num = data$state[i]
+  data$state[i] = state_names[state_codes$STATE[num]]
+}
+head(data)
+```
+

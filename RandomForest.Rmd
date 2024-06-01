@@ -1,5 +1,6 @@
 ---
-title: "R Notebook"
+title: "Random Forest"
+author: "Kylee Ornstein"
 output: html_notebook
 ---
 

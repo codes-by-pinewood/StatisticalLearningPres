@@ -23,7 +23,7 @@ library(caTools)
 library(dplyr)
 library(caret)
 
-file_path <- "communities.data"
+file_path <- "Data/communities.data"
 
 data <- read.table(file_path, sep = ",", header = TRUE, na.strings = "?")
 
@@ -32,10 +32,10 @@ colnames(data)
 
 ```
 ```{r}
-names_file <- "communities.names"
+names_file <- "Data/communities.names"
 column_names <- readLines(names_file)
 
-csv_file <- "communities.csv"
+csv_file <- "Data/communities.csv"
 
 # Write the data to a .csv file
 write.csv(data, file = csv_file, row.names = FALSE)
@@ -58,7 +58,7 @@ print(column_names)
 ```
 
 ```{r}
-data_file <- "communities.data"
+data_file <- "Data/communities.data"
 
 # Read the .data file into a data frame
 data <- read.table(data_file, sep = ",", header = FALSE, na.strings = "?")
