@@ -1,0 +1,29 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+set.seed(42)
+sample <- sample(c(TRUE, FALSE), nrow(data), replace=TRUE, prob=c(0.7,0.3))
+train  <- data[sample, ]
+test   <- data[!sample, ]
+```
+
+
+```{r}
+library(randomForest)
+set.seed(42)
+rf <- randomForest(ViolentCrimesPerPop ~ ., data = train,
+importance = TRUE, mtry = sqrt(ncol(data)-1), na.action = na.omit)
+```
+
+
+```{r}
+varImpPlot(rf, cex = .6, main = "Variable importances for the random forest")
+rf_imps <- importance(rf)
+head(rf_imps[order(rf_imps[ , "%IncMSE"], decreasing = TRUE),], 10)
+head(rf_imps[order(rf_imps[ , "IncNodePurity"], decreasing = TRUE),], 10)
+```
+
